@@ -9,6 +9,24 @@ Set-Alias HandBrakeCLI 'D:\Program Files\Handbrake\HandBrakeCLI.exe'
 
 # C:\Program Files\WindowsPowerShell\Modules\{module name}\{module name}.psm1
 
+<#
+.SYNOPSIS
+Synopsis
+.DESCRIPTION
+Description
+.EXAMPLE
+Example 1
+.EXAMPLE
+Example 2
+.PARAMETER SourceDirectory
+Param 1
+.PARAMETER DestinationDirectory
+Param 2
+.PARAMETER MinLengthMins
+Param 3
+.PARAMETER MaxLengthMins
+Param 4
+#>
 function Invoke-MakeMkv {
     [cmdletbinding(SupportsShouldProcess=$true)]
     param(
@@ -18,29 +36,7 @@ function Invoke-MakeMkv {
         [int]$MinLengthMins,
         [int]$MaxLengthMins
     )
-    <#
-    http://www.makemkv.com/developers/usage.txt
 
-    Use: makemkvcon [switches] Command [Parameters]
-        Commands:
-        info <source>
-            prints info about disc
-        mkv <source> <title id> <destination folder>
-            saves a single title to mkv file
-        stream <source>
-            starts streaming server
-        backup <source> <destination folder>
-            backs up disc to a hard drive
-
-        Source specification:
-        iso:<FileName>    - open iso image <FileName>
-        file:<FolderName> - open files in folder <FolderName>
-        disc:<DiscId>     - open disc with id <DiscId> (see list Command)
-        dev:<DeviceName>  - open disc with OS device name <DeviceName>
-
-        Switches:
-        -r --robot        - turn on "robot" mode, see http://www.makemkv.com/developers
-    #>
     $makeMkvArgs = '-r', '--decrypt', '--directio=true', '--cache=1024'
 
     if ($MinLengthMins) {
@@ -111,8 +107,150 @@ function Invoke-Handbrake {
     else {
         exit 1
     }
-    # https://trac.handbrake.fr/wiki/CLIGuide
-    # https://trac.handbrake.fr/wiki/BuiltInPresets
+    # https://handbrake.fr/docs/en/latest/cli/cli-options.html
+    # https://handbrake.fr/docs/en/latest/technical/official-presets.html
+    $filesToProcess = @()
+    Get-ChildItem $SourceDirectory -Filter *.mkv | 
+        ForEach-Object {
+            Write-Host "Inspecting '$_'"
+            
+            $doAdd = $true
+            if ($MinLengthMins -or $MaxLengthMins) {
+                $durationMs = (& mediainfo $_.FullName --Inform='General;%Duration%')
+                $durationMinutes = [Math]::Round($durationMs / 1000 / 60, 2)
+
+                if ($MinLengthMins -and $durationMinutes -lt $MinLengthMins) {
+                    $doAdd = $false
+                }
+                if ($doAdd -and $MaxLengthMins -and $durationMinutes -gt $MinLengthMins) {
+                    $doAdd = $false
+                }    
+                if (!$doAdd) {
+                    Write-Host "Skipping file - $($durationMinutes)m outside of target range"
+                }
+            }
+            
+            if ($doAdd) {
+                $numAudio = mediainfo --Inform='General;%AudioCount%' $_.FullName
+                if (!$numAudio) { $numAudio = 0 }
+                $audioLangs = (mediainfo --Inform='Audio;%Language%,' $_.FullName) -split ','
+                Write-Host "Found $numAudio audio tracks - $audioLangs"
+    
+                $includeAudioTracks = @(1)
+                $firstAudioTrackIsEnglish = $false
+                for ($i = 1; $i -le $audioLangs.Count; $i++) {
+                    $index = $i - 1
+                    if ($audioLangs[$index]) {
+                        if (Confirm-EnglishCode($audioLangs[$index])) {
+                            if ($i -eq 1) { 
+                                $firstAudioTrackIsEnglish = $true 
+                            }
+                            else {
+                                $includeAudioTracks += $i
+                            }
+                            break
+                        }
+                    }
+                }
+    
+                $numSubtitle = mediainfo --Inform='General;%TextCount%' $_.FullName
+                if (!$numSubtitle) { $numSubtitle = 0 }
+                $subtitleLangs = (mediainfo --Inform='Text;%Language%,' $_.FullName) -split ','
+                Write-Host "Found $numSubtitle subtitle tracks - $subtitleLangs"
+    
+                $includeSubtitleTracks = @()
+                for ($i = 1; $i -le $subtitleLangs.Count; $i++) {
+                    $index = $i - 1
+                    if ($subtitleLangs[$index]) {
+                        if (Confirm-EnglishCode($subtitleLangs[$index])) {
+                            $includeSubtitleTracks += $i
+                            break
+                        }
+                    }
+                }
+
+                $fullDestinationDirectory = Join-Path $DestinationDirectory $sourceDirectoryName
+                if (!(Test-Path $fullDestinationDirectory)) {
+                    New-Item -Path $fullDestinationDirectory -ItemType Directory
+                }
+                $fullDestinationPath = Join-Path $fullDestinationDirectory $_.Name
+        
+                ### Source Options
+                    $args = @()
+                    #$args += "--verbose"
+                    $args += "--input", $_.FullName        # source file
+        
+                ### Destination Options
+                    $args += "--output", $fullDestinationPath # destination file
+                    $args += "--format", "av_mkv"        # container file type
+                    $args += "--markers"                 # add chapter markers
+        
+                ### Video Options
+                    $args += "--encoder", "x264"    # use H.264 encoder
+                    $args += "--quality", "19.0"    # video quality (lower is better)
+                    $args += "--cfr"                # constant framerate
+        
+                ### Audio Options
+                    if ($numAudio -gt 0) {
+                        $args += "--audio", ($includeAudioTracks -join ',')             # audio tracks
+                        $args += "--aencoder", "copy:ac3"   # AC3 passthru
+                    }
+        
+                ### Picture Settings
+                    $args += "--crop", "0:0:0:0"
+                    $args += "--strict-anamorphic"
+        
+                ### Filters
+                    $args += "--decomb=bob"
+        
+                ### Subtitle Options
+                    if ($numSubtitle -gt 0) {
+                        if ($firstAudioTrackIsEnglish) {
+                            $args += "--subtitle", "scan,$($includeSubtitleTracks -join ',')"
+                            $args += "--subtitle-burned", "scan"
+                            $args += "--native-language", "eng"
+                        }
+                        else {
+                            $args += "--subtitle", ($includeSubtitleTracks -join ',')
+                        }
+                    }
+                
+                Write-Host "COMMAND: HandBrakeCLI $args" -ForegroundColor Green
+                if ($PSCmdlet.ShouldProcess("$args", "HandBrakeCli")) {
+                    & HandBrakeCLI $args
+                }
+            }
+        }
+    Write-Host "Found $($filesToProcess.Count) files to process"
+}
+
+Export-ModuleMember -Function Invoke-MakeMkv
+Export-ModuleMember -Function Invoke-Handbrake
+
+    # Use: makemkvcon [switches] Command [Parameters] 
+        <#
+        http://www.makemkv.com/developers/usage.txt\
+        
+        Commands:
+        info <source>
+            prints info about disc
+        mkv <source> <title id> <destination folder>
+            saves a single title to mkv file
+        stream <source>
+            starts streaming server
+        backup <source> <destination folder>
+            backs up disc to a hard drive
+
+        Source specification:
+        iso:<FileName>    - open iso image <FileName>
+        file:<FolderName> - open files in folder <FolderName>
+        disc:<DiscId>     - open disc with id <DiscId> (see list Command)
+        dev:<DeviceName>  - open disc with OS device name <DeviceName>
+
+        Switches:
+        -r --robot        - turn on "robot" mode, see http://www.makemkv.com/developers
+        #>
+
     # Syntax: HandBrakeCLI [options] -i <device> -o <file>
     ### General Handbrake Options------------------------------------------------
         <#
@@ -428,120 +566,3 @@ function Invoke-Handbrake {
         <number>          If "number" is omitted, the first srt is burned.
             "number" is an 1 based index into the srt-file list
         #>
-    $filesToProcess = @()
-    Get-ChildItem $SourceDirectory -Filter *.mkv | 
-        ForEach-Object {
-            Write-Host "Inspecting '$_'"
-            
-            $doAdd = $true
-            if ($MinLengthMins -or $MaxLengthMins) {
-                $durationMs = (& mediainfo $_.FullName --Inform='General;%Duration%')
-                $durationMinutes = [Math]::Round($durationMs / 1000 / 60, 2)
-
-                if ($MinLengthMins -and $durationMinutes -lt $MinLengthMins) {
-                    $doAdd = $false
-                }
-                if ($doAdd -and $MaxLengthMins -and $durationMinutes -gt $MinLengthMins) {
-                    $doAdd = $false
-                }    
-                if (!$doAdd) {
-                    Write-Host "Skipping file - $($durationMinutes)m outside of target range"
-                }
-            }
-            
-            if ($doAdd) {
-                $numAudio = mediainfo --Inform='General;%AudioCount%' $_.FullName
-                if (!$numAudio) { $numAudio = 0 }
-                $audioLangs = (mediainfo --Inform='Audio;%Language%,' $_.FullName) -split ','
-                Write-Host "Found $numAudio audio tracks - $audioLangs"
-    
-                $includeAudioTracks = @(1)
-                $firstAudioTrackIsEnglish = $false
-                for ($i = 1; $i -le $audioLangs.Count; $i++) {
-                    $index = $i - 1
-                    if ($audioLangs[$index]) {
-                        if (Confirm-EnglishCode($audioLangs[$index])) {
-                            if ($i -eq 1) { 
-                                $firstAudioTrackIsEnglish = $true 
-                            }
-                            else {
-                                $includeAudioTracks += $i
-                            }
-                            break
-                        }
-                    }
-                }
-    
-                $numSubtitle = mediainfo --Inform='General;%TextCount%' $_.FullName
-                if (!$numSubtitle) { $numSubtitle = 0 }
-                $subtitleLangs = (mediainfo --Inform='Text;%Language%,' $_.FullName) -split ','
-                Write-Host "Found $numSubtitle subtitle tracks - $subtitleLangs"
-    
-                $includeSubtitleTracks = @()
-                for ($i = 1; $i -le $subtitleLangs.Count; $i++) {
-                    $index = $i - 1
-                    if ($subtitleLangs[$index]) {
-                        if (Confirm-EnglishCode($subtitleLangs[$index])) {
-                            $includeSubtitleTracks += $i
-                            break
-                        }
-                    }
-                }
-
-                $fullDestinationDirectory = Join-Path $DestinationDirectory $sourceDirectoryName
-                if (!(Test-Path $fullDestinationDirectory)) {
-                    New-Item -Path $fullDestinationDirectory -ItemType Directory
-                }
-                $fullDestinationPath = Join-Path $fullDestinationDirectory $_.Name
-        
-                ### Source Options
-                    $args = @()
-                    #$args += "--verbose"
-                    $args += "--input", $_.FullName        # source file
-        
-                ### Destination Options
-                    $args += "--output", $fullDestinationPath # destination file
-                    $args += "--format", "av_mkv"        # container file type
-                    $args += "--markers"                 # add chapter markers
-        
-                ### Video Options
-                    $args += "--encoder", "x264"    # use H.264 encoder
-                    $args += "--quality", "19.0"    # video quality (lower is better)
-                    $args += "--cfr"                # constant framerate
-        
-                ### Audio Options
-                    if ($numAudio -gt 0) {
-                        $args += "--audio", ($includeAudioTracks -join ',')             # audio tracks
-                        $args += "--aencoder", "copy:ac3"   # AC3 passthru
-                    }
-        
-                ### Picture Settings
-                    $args += "--crop", "0:0:0:0"
-                    $args += "--strict-anamorphic"
-        
-                ### Filters
-                    $args += "--decomb=bob"
-        
-                ### Subtitle Options
-                    if ($numSubtitle -gt 0) {
-                        if ($firstAudioTrackIsEnglish) {
-                            $args += "--subtitle", "scan,$($includeSubtitleTracks -join ',')"
-                            $args += "--subtitle-burned", "scan"
-                            $args += "--native-language", "eng"
-                        }
-                        else {
-                            $args += "--subtitle", ($includeSubtitleTracks -join ',')
-                        }
-                    }
-                
-                Write-Host "COMMAND: HandBrakeCLI $args" -ForegroundColor Green
-                if ($PSCmdlet.ShouldProcess("$args", "HandBrakeCli")) {
-                    & HandBrakeCLI $args
-                }
-            }
-        }
-    Write-Host "Found $($filesToProcess.Count) files to process"
-}
-
-Export-ModuleMember -Function Invoke-MakeMkv
-Export-ModuleMember -Function Invoke-Handbrake
