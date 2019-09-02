@@ -136,19 +136,19 @@ function Invoke-Handbrake {
                 $audioLangs = (mediainfo --Inform='Audio;%Language%,' $_.FullName) -split ','
                 Write-Host "Found $numAudio audio tracks - $audioLangs"
     
-                $includeAudioTracks = @(1)
-                $firstAudioTrackIsEnglish = $false
+                $includeAudioTracks = @(1) # always include the first track (usually will be the original language on foreign films)
+                $isFirstAudioTrackEnglish = $false
                 for ($i = 1; $i -le $audioLangs.Count; $i++) {
                     $index = $i - 1
                     if ($audioLangs[$index]) {
                         if (Confirm-EnglishCode($audioLangs[$index])) {
                             if ($i -eq 1) { 
-                                $firstAudioTrackIsEnglish = $true 
+                                $isFirstAudioTrackEnglish = $true 
                             }
                             else {
                                 $includeAudioTracks += $i
                             }
-                            break
+                            #break
                         }
                     }
                 }
@@ -206,7 +206,7 @@ function Invoke-Handbrake {
                 ### Subtitle Options
                     if ($numSubtitle -gt 0) {
                         if ($firstAudioTrackIsEnglish) {
-                            $args += "--subtitle", "scan,$($includeSubtitleTracks -join ',')"
+                            $args += "--subtitle", "scan,$($includeSubtitleTracks -join ',')" # forced subtitle scan if first track is english
                             $args += "--subtitle-burned", "scan"
                             $args += "--native-language", "eng"
                         }
