@@ -6,7 +6,7 @@ function Get-WafServer {
         [parameter(Mandatory=$true)]
         [hashtable]$AuthHeader,
         [string[]]$ServerName, # Name in WAF is abritrary, but maybe can use "HostName" as an explicit identifier (although it's null by default), checking IP may be the best option here
-        [string[]]$ExcludeHostHeader # clubreadyweb01.com, clubreadyweb02.com, etc.
+        [string[]]$ExcludeHostHeader # website1.com, website2.com, etc.
     )
 
     $isValidBaseUri = Test-BaseUri $WafBaseUrl
@@ -19,7 +19,7 @@ function Get-WafServer {
     └── Service Group ("WEB")
     └── Virtual Service ("WEB443")
         └── Content Rule ("WEB443") - host header can be found here
-            └── Rule Group Server ("CRWeb01")
+            └── Rule Group Server ("web01")
     #>
     # $vsitePath = '/restapi/v1/vsites'
     # $vsiteIdPlaceholder = '{vsite_id}'
@@ -286,10 +286,10 @@ Example saved for later:
 > GWMI Win32_NetworkAdapterConfiguration -Filter "IPEnabled = $true" | select @{ N = 'IP'; E = { if ($_.IPAddress.Count -gt 1) { $_.IPAddress.split(',')[0] } else { $_.IPAddress }}}
 .EXAMPLE
 Use the WhatIf parameter to prevent write operations from happening.
-Disable-WafServer -WafBaseUrl 'http://barracuda1:8000' -Credential $cred -ServerName 'crweb01' -ExcludeHostHeader 'clubreadyweb01.com' -WhatIf
+Disable-WafServer -WafBaseUrl 'http://barracuda1:8000' -Credential $cred -ServerName 'web01' -ExcludeHostHeader 'website.com' -WhatIf
 .EXAMPLE
 If ExcludeHostHeader is not included then all server instances will be disabled.
-Disable-WafServer -WafBaseUrl $WafBaseUrl -Credential $Credential -ServerName 'crweb01'
+Disable-WafServer -WafBaseUrl $WafBaseUrl -Credential $Credential -ServerName 'web01'
 .PARAMETER WafBaseUrl
 The base URL to access the Barracuda Web Application Firewall.
 Examples: 'http://13.68.88.164:8000', 'http://barracuda1:8000' 
@@ -304,8 +304,8 @@ The name of the server to disabled in the WAF. Can be an array of names.
 Note that currently the server name is optimistically matched against the server ID in the WAF. These should be the same, but it is possible for them to be different.
 .PARAMETER ExcludeHostHeader
 The name of host headers that are configured in the WAF that should be ignored. Can be an array of names.
-Examples: 'clubreadyweb01.com', 'onboarding.clubready.com', '*.clubreadyweb05.com'
-Note that if there are two or less segments (as shown in the first example above), then this filter will be applied for all host headers found in the WAF that end with those segments. So specifying 'clubreadyweb01.com' will match headers '*.clubreadyweb01.com', 'abc.clubreadyweb01.com', 'xyz.clubreadyweb01.com', etc.
+Examples: 'website.com', 'abc.website.com', '*.website2.com'
+Note that if there are two or less segments (as shown in the first example above), then this filter will be applied for all host headers found in the WAF that end with those segments. So specifying 'website.com' will match headers '*.website.com', 'abc.website.com', 'xyz.website.com', etc.
 #>
 function Disable-WafServer {
     [cmdletbinding(SupportsShouldProcess=$true)]
@@ -338,10 +338,10 @@ Example saved for later:
 > GWMI Win32_NetworkAdapterConfiguration -Filter "IPEnabled = $true" | select @{ N = 'IP'; E = { if ($_.IPAddress.Count -gt 1) { $_.IPAddress.split(',')[0] } else { $_.IPAddress }}}
 .EXAMPLE
 Use the WhatIf parameter to prevent write operations from happening.
-Enable-WafServer -WafBaseUrl 'http://barracuda1:8000' -Credential $cred -ServerName 'crweb01' -ExcludeHostHeader 'clubreadyweb01.com' -WhatIf
+Enable-WafServer -WafBaseUrl 'http://barracuda1:8000' -Credential $cred -ServerName 'web01' -ExcludeHostHeader 'website.com' -WhatIf
 .EXAMPLE
 If ExcludeHostHeader is not included then all server instances will be disabled.
-Enable-WafServer -WafBaseUrl $WafBaseUrl -Credential $Credential -ServerName 'crweb01'
+Enable-WafServer -WafBaseUrl $WafBaseUrl -Credential $Credential -ServerName 'web01'
 .PARAMETER WafBaseUrl
 The base URL to access the Barracuda Web Application Firewall.
 Examples: 'http://13.68.88.164:8000', 'http://barracuda1:8000' 
@@ -352,8 +352,8 @@ The name of the server to enabled in the WAF. Can be an array of names.
 Note that currently the server name is optimistically matched against the server ID in the WAF. These should be the same, but it is possible for them to be different.
 .PARAMETER ExcludeHostHeader
 The name of host headers that are configured in the WAF that should be ignored. Can be an array of names.
-Examples: 'clubreadyweb01.com', 'onboarding.clubready.com', '*.clubreadyweb05.com'
-Note that if ther eare two or less segments (as shown in the first example above), then this filter will be applied for all host headers found in the WAF that end with those segments. So specifying 'clubreadyweb01.com' will match headers '*.clubreadyweb01.com', 'abc.clubreadyweb01.com', 'xyz.clubreadyweb01.com', etc.
+Examples: 'website.com', 'abc.website.com', '*.website2.com'
+Note that if ther eare two or less segments (as shown in the first example above), then this filter will be applied for all host headers found in the WAF that end with those segments. So specifying 'website.com' will match headers '*.website.com', 'abc.website.com', 'xyz.website.com', etc.
 #>
 function Enable-WafServer {
     [cmdletbinding(SupportsShouldProcess=$true)]
