@@ -33,15 +33,12 @@ function Invoke-MakeMkv {
         [parameter(Position=0,ValueFromPipeline=$true)]
         [string]$SourceDirectory = 'F:\',
         [string]$DestinationDirectory = 'S:\~rip\MakeMKV',
-        [int]$MinLengthMins,
+        [int]$MinLengthMins = 0,
         [int]$MaxLengthMins
     )
 
     $makeMkvArgs = '-r', '--decrypt', '--directio=true', '--cache=1024'
-
-    if ($MinLengthMins) {
-        $makeMkvArgs += "--minlength=$($MinLengthMins * 60)"
-    }
+    $makeMkvArgs += "--minlength=$($MinLengthMins * 60)"
 
     if ($SourceDirectory -match "^([A-Za-z]{1}:)\\?$") {
         Write-Host "Root drive path detected"
