@@ -24,8 +24,6 @@ Param 1
 Param 2
 .PARAMETER MinLengthMins
 Param 3
-.PARAMETER MaxLengthMins
-Param 4
 #>
 function Invoke-MakeMkv {
     [cmdletbinding(SupportsShouldProcess=$true)]
@@ -33,8 +31,7 @@ function Invoke-MakeMkv {
         [parameter(Position=0,ValueFromPipeline=$true)]
         [string]$SourceDirectory = 'F:\',
         [string]$DestinationDirectory = 'S:\~rip\MakeMKV',
-        [int]$MinLengthMins = 0,
-        [int]$MaxLengthMins
+        [int]$MinLengthMins = 0
     )
 
     $makeMkvArgs = '-r', '--decrypt', '--directio=true', '--cache=1024'
