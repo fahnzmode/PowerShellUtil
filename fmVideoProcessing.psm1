@@ -1,12 +1,13 @@
-#region Prerequisites
+#region Prerequisites (add to PS profile)
 <#
-Set-Alias mediainfo 'D:\Program Files\MediaInfo\CLI\MediaInfo.exe'
-Set-Alias makemkvcon64 'D:\Program Files (x86)\MakeMKV\makemkvcon64.exe'
-Set-Alias makemkvcon 'D:\Program Files (x86)\MakeMKV\makemkvcon.exe'
-Set-Alias HandBrakeCLI 'D:\Program Files\Handbrake\HandBrakeCLI.exe'
+Set-Alias mediainfo 'C:\Program Files\MediaInfo\CLI\MediaInfo.exe'
+Set-Alias makemkvcon64 'C:\Program Files (x86)\MakeMKV\makemkvcon64.exe'
+Set-Alias makemkvcon 'C:\Program Files (x86)\MakeMKV\makemkvcon.exe'
+Set-Alias HandBrakeCLI 'C:\Program Files\Handbrake\CLI\HandBrakeCLI.exe'
 #>
 #endregion
 
+# Install here
 # C:\Program Files\WindowsPowerShell\Modules\{module name}\{module name}.psm1
 
 <#
